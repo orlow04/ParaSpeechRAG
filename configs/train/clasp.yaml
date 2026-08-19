@@ -1,0 +1,59 @@
+# CLASP fusion-encoder training.
+#
+# Values below are the DEFAULTS in scripts/train.py, not a record of the run
+# that produced any released checkpoint. Fill in the `run` block from the
+# actual launch command before treating this as provenance — see the TODOs.
+
+name: clasp
+script: scripts/train.py
+
+model:
+  fusion: HubertLabseConcat
+  mode: joint                        # joint | audio | image
+  in_features_text: 1024             # LaBSE
+  in_features_image: 1000            # EfficientNet-B7 logits
+  freeze_encoders: false             # true trains only the mix_seq fusion head
+
+optim:
+  optimizer: Adam
+  learning_rate: 1.0e-4
+  batch_size_train: 32
+  batch_size_val: 16
+  num_epochs: 100
+  lr_scheduler: StepLR
+  lr_step_size: 10
+
+objective:
+  type: contrastive                  # InfoNCE over in-batch negatives
+  temperature: 2.659260036932778     # log(1/0.07), the train.py default
+  # NOTE: paraspeechrag.train.trainer defaults to temperature=log(0.07)
+  # (negative), while scripts/train.py passes log(1/0.07) (positive). The CLI
+  # value wins for anything launched through the script; a direct call to
+  # train_the_model() without an explicit temperature gets the other one.
+
+selection:
+  criterion: validation contrastive loss
+  early_stopping_patience: 10
+  # Model selection MUST use a split disjoint from the evaluation corpus.
+  # Verify with: python scripts/sanity/check_split_disjoint.py <PKL>
+
+init:
+  # Warm start from the official ECIR-2025 weights.
+  checkpoint: models/checkpoints/CLASP_Concat_Final_Fusion_Encoder.pt
+  source: https://huggingface.co/llm-lab/CLASP
+  note: loads fusion weights only — no optimizer or epoch state
+
+# ---------------------------------------------------------------------------
+# Provenance of the released checkpoint. REQUIRED before publication: without
+# these, the training data behind every headline number is unreconstructable.
+run:
+  dataset_pkl: TODO
+  n_spoken_squad_pairs: TODO         # paper reports 18,896 — a SUBSET of the
+                                     # standard Spoken-SQuAD train split, so the
+                                     # exact pair list must be released
+  n_voxpopuli_en_pairs: TODO         # paper reports 184,219
+  epochs_actually_run: TODO
+  seed: TODO                         # scripts/train.py does not currently set
+                                     # a global seed — see docs/GAPS.md
+  output_checkpoint: TODO
+  output_checkpoint_sha256: TODO

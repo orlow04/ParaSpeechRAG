@@ -8,7 +8,7 @@ dev_wav*
 artifacts
 Spoken_Squad_Dataset
 Spoken*
-results/
+# results/  -> superseded by the results/* rules below (see end of file)
 venv/
 .venv/
 .venv-mseb/
@@ -167,3 +167,16 @@ data/noise_sources
 .env.local
 .env.*.local
 
+
+# --- ParaSpeechRAG artifacts ---
+# Audio, built PKLs and generated results are large and/or licence-encumbered.
+# The frozen corpus, split ID lists and checksum manifests ARE tracked - they
+# are what makes a reported number interpretable.
+data/datasets/
+data/noise_sources/
+results/*
+!results/.gitkeep
+!results/legacy_*
+figures/*.png
+models/checkpoints/*.pt
+artifacts_user/

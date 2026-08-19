@@ -1,0 +1,41 @@
+# CLASP-chunked: one row per chunk, max-sim aggregation per paragraph.
+#
+# Each chunk WAV is encoded independently; chunks sharing a paragraph_id form
+# one candidate whose score is the MAX cosine over its chunks (ColBERT /
+# SPIRAL style) rather than a pooled mean.
+
+name: clasp_chunked
+implemented: true
+
+encoder:
+  fusion: HubertLabseConcat          # paraspeechrag.models.fusion
+  checkpoint: models/checkpoints/CLASP_Concat_Final_Fusion_Encoder.pt
+  checkpoint_sha256: TODO
+  audio_encoder: facebook/hubert-large-ls960-ft
+  spectrogram_encoder: efficientnet_b7
+  text_encoder: sentence-transformers/LaBSE
+  in_features_text: 1024
+  in_features_image: 1000
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 320000              # 20 s window
+  pooling: max_sim
+
+build:
+  script: scripts/build_spoken_squad_pkl.py
+  pooling_mode: chunked
+  # paragraph_id is "{split}:{article_idx}_{paragraph_idx}". The split prefix
+  # keeps train and validation in separate ID namespaces — without it,
+  # paragraph grouping merges chunks across splits. See docs/GAPS.md.
+
+eval:
+  script: scripts/run_retrieval_eval.py
+  mode: paragraph_grouped
+  hits_k: [1, 5, 10, 50]
+  # Candidate pool = number of DISTINCT paragraph_id values in the split, not
+  # the number of rows. run_retrieval_eval.py reports it as n_paragraphs.
+
+metrics:
+  reported: [Hits@1, Hits@5, Hits@10, MRR, mean_rank, median_rank,
+             n_paragraphs, n_chunks, max_chunks_per_paragraph]

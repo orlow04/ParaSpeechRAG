@@ -1,0 +1,30 @@
+# Rate axis: pitch-preserving time stretch.
+#
+# Follows the Speech Robust Bench (SRB) protocol, arXiv:2403.07937.
+
+axis: rate
+implemented: true
+generator: scripts/perturb/speed.py
+
+speed_factors: [0.5, 0.625, 0.75, 0.875, 1.25, 1.5, 1.75, 2.0]
+# Note 1.0 is absent: the unperturbed condition is the clean baseline, not a
+# regenerated 1.0x pass. If you need a round-trip control, add 1.0 explicitly
+# via --speeds — it will differ from clean by the phase vocoder's own artifacts,
+# which is exactly why it is a useful control.
+
+method: phase_vocoder
+implementation: librosa.effects.time_stretch(audio, rate=<factor>)
+pitch_preserving: true
+
+io:
+  load: librosa.load(sr=None, mono=True)   # native rate preserved
+  write: soundfile.write(out, stretched, sr)
+  output_sample_rate: source               # unchanged by the stretch
+  output_layout: <output_dir>/<factor>x/<name>.wav
+
+deterministic: true    # the phase vocoder has no stochastic component; output
+                       # depends only on the librosa/numpy version
+
+# --- reproducibility --------------------------------------------------------
+librosa_version: TODO   # record for any run you report
+numpy_version: TODO

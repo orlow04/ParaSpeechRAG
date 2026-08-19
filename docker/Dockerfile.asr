@@ -1,0 +1,19 @@
+FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
+
+WORKDIR /workspace
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    ffmpeg \
+    libsndfile1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
+
+RUN python -m pip install --upgrade pip setuptools wheel && \
+    python -m pip install \
+      "nemo_toolkit[asr,cu12]==2.7.3" \
+      pyyaml
+
+CMD ["tail", "-f", "/dev/null"]

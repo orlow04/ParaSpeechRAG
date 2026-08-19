@@ -1,0 +1,117 @@
+model:
+  repo_id: nvidia/parakeet-tdt-0.6b-v2
+  device: cuda
+
+transcription:
+  batch_size: 32
+  recursive: false
+  output_dir: /home/dollis/gen_vc/transcriptions
+
+# 25 condições: baseline + 8 speed + 5 codec_mp3 + 5 codec_opus + 6 genvc
+
+folders:
+
+  # --- BASELINE ---
+  - name: baseline
+    input_dir: /home/dollis/gen_vc/spokensquad_cache
+    output_csv: baseline.csv
+
+  # --- SPEED ---
+  - name: speed_0.5x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/0.5x
+    output_csv: speed_0.5x.csv
+
+  - name: speed_0.625x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/0.625x
+    output_csv: speed_0.625x.csv
+
+  - name: speed_0.75x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/0.75x
+    output_csv: speed_0.75x.csv
+
+  - name: speed_0.875x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/0.875x
+    output_csv: speed_0.875x.csv
+
+  - name: speed_1.25x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/1.25x
+    output_csv: speed_1.25x.csv
+
+  - name: speed_1.5x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/1.5x
+    output_csv: speed_1.5x.csv
+
+  - name: speed_1.75x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/1.75x
+    output_csv: speed_1.75x.csv
+
+  - name: speed_2.0x
+    input_dir: /home/dollis/gen_vc/output/spokensquad_speed/2.0x
+    output_csv: speed_2.0x.csv
+
+  # --- CODEC MP3 ---
+  - name: codec_mp3_8kbps
+    input_dir: /home/dollis/gen_vc/output/spokensquad_codec/8kbps
+    output_csv: codec_mp3_8kbps.csv
+
+  - name: codec_mp3_16kbps
+    input_dir: /home/dollis/gen_vc/output/spokensquad_codec/16kbps
+    output_csv: codec_mp3_16kbps.csv
+
+  - name: codec_mp3_32kbps
+    input_dir: /home/dollis/gen_vc/output/spokensquad_codec/32kbps
+    output_csv: codec_mp3_32kbps.csv
+
+  - name: codec_mp3_64kbps
+    input_dir: /home/dollis/gen_vc/output/spokensquad_codec/64kbps
+    output_csv: codec_mp3_64kbps.csv
+
+  - name: codec_mp3_128kbps
+    input_dir: /home/dollis/gen_vc/output/spokensquad_codec/128kbps
+    output_csv: codec_mp3_128kbps.csv
+
+  # --- CODEC OPUS ---
+  - name: codec_opus_8kbps
+    input_dir: /home/dollis/gen_vc/spokensquad_codec_opus/8kbps
+    output_csv: codec_opus_8kbps.csv
+
+  - name: codec_opus_16kbps
+    input_dir: /home/dollis/gen_vc/spokensquad_codec_opus/16kbps
+    output_csv: codec_opus_16kbps.csv
+
+  - name: codec_opus_32kbps
+    input_dir: /home/dollis/gen_vc/spokensquad_codec_opus/32kbps
+    output_csv: codec_opus_32kbps.csv
+
+  - name: codec_opus_64kbps
+    input_dir: /home/dollis/gen_vc/spokensquad_codec_opus/64kbps
+    output_csv: codec_opus_64kbps.csv
+
+  - name: codec_opus_128kbps
+    input_dir: /home/dollis/gen_vc/spokensquad_codec_opus/128kbps
+    output_csv: codec_opus_128kbps.csv
+
+  # --- VOICE CONVERSION (GenVC) ---
+  - name: genvc_1089
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/1089-134686-0000
+    output_csv: genvc_1089.csv
+
+  - name: genvc_2803
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/2803-154320-0012
+    output_csv: genvc_2803.csv
+
+  - name: genvc_3081
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/3081-166546-0023
+    output_csv: genvc_3081.csv
+
+  - name: genvc_6319
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/6319-275224-0006
+    output_csv: genvc_6319.csv
+
+  - name: genvc_azuma
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/azuma_0
+    output_csv: genvc_azuma.csv
+
+  - name: genvc_trump
+    input_dir: /home/dollis/gen_vc/output/spokensquad_genvc/trump_0
+    output_csv: genvc_trump.csv

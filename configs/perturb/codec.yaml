@@ -1,0 +1,47 @@
+# Codec axis: MP3 and Opus encode/decode round-trips.
+#
+# Both scripts shell out to ffmpeg, encode the source WAV at a target bitrate,
+# then decode straight back to WAV. The artifact under test is the codec's
+# lossy reconstruction, not the compressed file.
+
+axis: codec
+implemented: true
+generators:
+  mp3:  scripts/perturb/codec_mp3.py
+  opus: scripts/perturb/codec_opus.py
+
+bitrates_kbps: [8, 16, 32, 64, 128]   # identical for both codecs, by design,
+                                      # so the two curves are directly comparable
+
+mp3:
+  encoder: libmp3lame                 # ffmpeg default for .mp3 output
+  encode_cmd: ffmpeg -y -i <src.wav> -b:a <N>k <tmp.mp3>
+  decode_cmd: ffmpeg -y -i <tmp.mp3> <out.wav>
+  output_sample_rate: source          # NOT resampled — decode inherits the
+                                      # source rate
+  output_layout: <output_dir>/<N>kbps/<name>.wav
+
+opus:
+  encoder: libopus                    # explicit -c:a libopus
+  container: ogg
+  encode_cmd: ffmpeg -y -i <src.wav> -c:a libopus -b:a <N>k <tmp.ogg>
+  decode_cmd: ffmpeg -y -i <tmp.ogg> -ar 24000 <out.wav>
+  output_sample_rate: 24000           # forced. Opus decodes natively at 48 kHz;
+                                      # 24 kHz is imposed on the way out.
+  output_layout: <output_dir>/<N>kbps/<name>.wav
+
+# --- reproducibility --------------------------------------------------------
+# libmp3lame and libopus output differs across ffmpeg builds, so the ffmpeg
+# version is part of the experimental condition. Record it here for any run you
+# report, and prefer releasing the decoded audio over the recipe.
+ffmpeg_version: TODO                  # `ffmpeg -version`, first line
+libmp3lame_version: TODO
+libopus_version: TODO
+
+# --- sample-rate note -------------------------------------------------------
+# MP3 keeps the source rate while Opus is forced to 24 kHz, so the two paths
+# feed the retriever at different rates. The retriever front-end
+# (paraspeechrag.inference.audio_preprocess) resamples everything to 16 kHz
+# mono regardless, so this is a difference in resampling history, not in the
+# rate the model sees. Worth stating explicitly in the paper — see docs/GAPS.md.
+retriever_input_sample_rate: 16000

@@ -1,0 +1,44 @@
+# CLASP-mean: one candidate per paragraph.
+#
+# The paragraph's chunk WAVs are concatenated into a single waveform before
+# encoding, and HuBERT / EfficientNet-B7 outputs are mean-pooled over 20 s
+# windows. Retrieval scores the query against the whole split as the candidate
+# pool.
+
+name: clasp_mean
+implemented: true
+
+encoder:
+  fusion: HubertLabseConcat          # paraspeechrag.models.fusion
+  checkpoint: models/checkpoints/CLASP_Concat_Final_Fusion_Encoder.pt
+  # Record the SHA256 of the checkpoint you actually evaluated with — every
+  # headline number depends on this one file.
+  checkpoint_sha256: TODO
+  audio_encoder: facebook/hubert-large-ls960-ft
+  spectrogram_encoder: efficientnet_b7   # torchvision, ImageNet weights
+  text_encoder: sentence-transformers/LaBSE
+  in_features_text: 1024
+  in_features_image: 1000
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 320000              # 20 s window
+  pooling: mean
+
+build:
+  script: scripts/build_spoken_squad_pkl.py
+  pooling_mode: mean
+
+eval:
+  script: scripts/run_retrieval_eval.py
+  mode: candidate
+  # --num-candidates must be set to the full split size for the candidate pool
+  # to be the whole corpus; experiments/eval_spoken_squad.sh computes this.
+  num_candidates: full_split
+  threshold: 0.5                     # only affects the P/R/F1 columns, not rank
+  hits_k: [1, 5, 10, 50]
+
+metrics:
+  # Hits@k in the code IS Recall@k in the paper (one relevant item per query).
+  # MAP coincides with MRR for the same reason. See docs/NAMING.md.
+  reported: [Hits@1, Hits@5, Hits@10, MRR, mean_rank, median_rank]

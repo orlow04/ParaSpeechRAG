@@ -1,0 +1,74 @@
+# Speaker axis: voice conversion to a fixed set of target voices.
+#
+# Two conversion systems. Only the GenVC driver is in this repository; the
+# Seed-VC driver was never committed and its audio was produced out-of-tree.
+
+axis: speaker
+implemented: partial
+
+# --- GenVC ------------------------------------------------------------------
+genvc:
+  implemented: true
+  generator: scripts/perturb/voice_convert_genvc.py
+  checkpoint: GenVC/pre_trained/GenVC_large.pth
+  upstream: GenVC (vendored alongside this repo; the script inserts ../GenVC
+            on sys.path — it is NOT a pip dependency)
+  decoding:
+    top_k: 15                # GPT sampling — STOCHASTIC, see note below
+    content_segment_seconds: 6.0
+    min_chunk_seconds: 0.32
+  output_sample_rate: config.audio.sample_rate   # from the GenVC config, not
+                                                 # resampled by this script
+  output_layout: <output_dir>/<ref_name>/<src_stem>.wav
+  reference_voices:
+    - azuma_0                  # licence UNRESOLVED — see docs/DATA_LICENSES.md
+    - trump_0                  # identifiable living public figure — see below
+    - 2803-154320-0012         # LibriSpeech
+    - 3081-166546-0023         # LibriSpeech
+    - 6319-275224-0006         # LibriSpeech
+    - 8842-302201-0002         # LibriSpeech
+  source_subset:
+    description: |
+      ~3k of the SpokenSQuAD dev audios, selected by filename in
+      should_include(): article 0 (all), article 10 (all), and article 11
+      paragraphs 0-13. Roughly 3k sources x 6 references = ~18k outputs.
+    filter: "^0_ | ^10_ | ^11_(0..13)_"
+    # This is a DELIBERATE subset, not full coverage. Any Recall@k over it is
+    # computed against a smaller candidate pool than the full-split clean
+    # baseline. Verify with scripts/sanity/audit_perturbation_coverage.py.
+
+# --- Seed-VC ----------------------------------------------------------------
+seedvc:
+  implemented: false           # no generation script in this repository
+  audio_consumed_from: data/datasets/spoken_squad_seed-vc/<voice>/
+  eval_driver: experiments/run_seedvc_all_voices.sh
+  reference_voices:
+    - azuma
+    - trump
+    - 1089-134686-0000         # LibriSpeech
+    - 2803-154320-0012         # LibriSpeech
+    - 3081-166546-0023         # LibriSpeech
+    - 6319-275224-0006         # LibriSpeech
+  paper_parameters:            # from the paper; NOT verifiable against code here
+    diffusion_steps: 30
+    cfg_rate: 0.7
+    length_adjust: 1.0
+    output_sample_rate: 16000
+
+# --- MISMATCH between the two voice sets ------------------------------------
+# Seed-VC's fourth LibriSpeech speaker is 1089-134686-0000; GenVC's is
+# 8842-302201-0002. The other three LibriSpeech speakers match. If Table 2
+# averages results over "the same six target voices" for both systems, that
+# premise does not hold — the two systems were run on different voice sets.
+# Resolve before publication: either regenerate one system on the other's set,
+# or report per-system results instead of the mean.
+voice_set_mismatch: true
+
+# --- reproducibility --------------------------------------------------------
+# Neither system is bit-reproducible. GenVC samples with top_k=15; Seed-VC runs
+# a 30-step diffusion sampler. Even with fixed seeds, a different torch/CUDA
+# build produces different waveforms and therefore different Recall@1. Release
+# the AUDIO, checksummed via scripts/build_manifest.py; the generator code is
+# provenance, not the reproduction path.
+deterministic: false
+seed_recorded: false           # neither driver sets or logs a seed

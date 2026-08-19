@@ -1,0 +1,67 @@
+# Noise-axis perturbation.
+#
+# This is the ONLY perturbation axis with an implementation in this repo. It is
+# applied at evaluation time by scripts/run_noise_robustness_eval.py, which
+# re-embeds the noisy waveform rather than writing perturbed audio to disk —
+# so unlike the speaker and emotion axes there is no released audio artifact
+# for the noise conditions. See docs/GAPS.md.
+#
+# This file documents the intended settings; the evaluation script still takes
+# its values from CLI flags. Keep the two in sync by hand until a config loader
+# exists.
+
+axis: noise
+implemented: true
+module: paraspeechrag.perturb.noise
+driver: scripts/run_noise_robustness_eval.py
+
+types: [white, reverb, ambient]
+
+# --- white Gaussian --------------------------------------------------------
+white:
+  snr_db: [20, 15, 10, 5]
+  # SNR is defined over FULL-SIGNAL RMS, not the ITU-T P.56 active-speech
+  # level. Spoken-SQuAD paragraph readings contain long silences, so full-signal
+  # RMS understates the speech level and the effective speech-to-noise ratio is
+  # higher than the nominal value. Verified: measured SNR matches nominal to
+  # 0.01 dB under this convention.
+  snr_convention: full_signal_rms
+  clip_to_unit_range: true   # additional nonlinear distortion at low SNR
+
+# --- ambient (ESC-50) ------------------------------------------------------
+ambient:
+  snr_db: [20, 15, 10, 5]
+  snr_convention: full_signal_rms
+  source: esc50                       # scripts/download_esc50.sh
+  source_url: https://github.com/karolpiczak/ESC-50
+  # ESC-50 is CC BY-NC 3.0 — see docs/DATA_LICENSES.md before redistributing
+  # anything derived from it.
+  pool_size: 64                       # --ambient-num-samples
+  pool_seed: 42                       # --ambient-seed; selects the pool AND the
+                                      # per-row clip assignment
+  crop_seed: 1234                     # --noise-seed; crop offset within a clip
+  selection: |
+    Pool is drawn without replacement from the SORTED ESC-50 file list, then
+    each row is assigned a clip by a seeded generator. Reproducible given the
+    same ESC-50 release. NOT a fixed query->clip file: if ESC-50 changes, the
+    assignment changes. Freeze data/manifests/ if you need that guarantee.
+  esc50_native_sr: 44100
+  resampled_to: 16000
+
+# --- reverberation ---------------------------------------------------------
+reverb:
+  # WARNING: reverb has NO SNR. The driver reuses --snr-levels as a decay-time
+  # knob (decay_time_ms = snr * 10), so a result row tagged "reverb_20.0" is a
+  # 200 ms decay tail, not a 20 dB SNR. Reverb rows do NOT share an axis with
+  # the white/ambient rows and must not be plotted against a shared SNR axis.
+  decay_time_ms: [200, 150, 100, 50]  # == snr_levels [20, 15, 10, 5] * 10
+  model: synthetic_exponential_decay   # not a measured or simulated RIR
+  impulse_response: |
+    rir[t] = exp(-3t / decay_time); rir[0] = 1.0 (direct sound);
+    rir[0.05*sr] += 0.5 (single early reflection at a FIXED 50 ms offset,
+    silently dropped when decay_time_ms < 50). Peak-normalised to 0.95, so this
+    transform also changes signal gain — unlike the additive noise functions.
+  deterministic: true
+
+# --- shared ----------------------------------------------------------------
+sample_rate: 16000

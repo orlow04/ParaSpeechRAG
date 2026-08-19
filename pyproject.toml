@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "paraspeechrag"
+version = "0.1.0"
+description = "ParaSpeechRAG: a perturbation-robustness benchmark for speech retrieval, built around CLASP."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "torch",
+  "scipy",   # used directly by paraspeechrag.perturb.noise
+  "numpy",
+  "tqdm",
+  "scikit-learn",
+  "matplotlib",
+  "librosa",
+  "soundfile",
+  "transformers",
+]
+
+[project.optional-dependencies]
+realdata = [
+  "sentence-transformers",
+  "torchvision",
+  "Pillow",
+]
+voxpopuli = [
+  "datasets",
+  "sentence-transformers",
+  "torchvision",
+  "Pillow",
+]
+notebooks = [
+  "datasets",
+]
+# SVQ native retrieval baseline + end-to-end RAG eval (CLASP retrieval + LLM
+# generation). The default generator is Qwen3-8B, which needs transformers>=4.51
+# and a CUDA GPU (e.g. a 4090). Runs in the base Python 3.10 env.
+rag = [
+  "datasets",
+  "sentence-transformers",
+  "torchvision",
+  "Pillow",
+  "transformers>=4.51",
+  "accelerate",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paraspeechrag"]
+
+[tool.uv]
+package = true
+

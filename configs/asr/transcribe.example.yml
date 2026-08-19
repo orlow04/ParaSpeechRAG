@@ -1,0 +1,19 @@
+model:
+  repo_id: nvidia/parakeet-tdt-0.6b-v2
+  local_dir: parakeet-tdt-0.6b-v2
+  device: cuda
+
+transcription:
+  batch_size: 32
+  # pattern:
+  recursive: true
+  output_dir: transcriptions
+  # chunk_size: 10000 # Só usar se as pastas tiverem muitos arquivos, para evitar sobrecarregar a memória. O valor é o número de arquivos processados por vez.
+folders:
+  - name: raw
+    input_dir: /workspace/audios_teste
+    output_csv: dev_transcriptions.csv
+
+  - name: raw
+    input_dir: /workspace/audios_teste
+    output_csv: dev_transcriptions_2.csv
