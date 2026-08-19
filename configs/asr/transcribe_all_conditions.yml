@@ -1,3 +1,9 @@
+# NOTE: every input_dir/output_dir below is an ABSOLUTE path from the machine
+# this job originally ran on (/home/dollis/gen_vc/...). There are 25 input_dir
+# entries. Rewrite them for your host before running, e.g.:
+#   sed -i 's|/home/dollis/gen_vc|'"$PWD"'/data/datasets|g' configs/asr/transcribe_all_conditions.yml
+# Kept verbatim rather than rewritten because the folder list is also a record
+# of which perturbation conditions were actually generated.
 model:
   repo_id: nvidia/parakeet-tdt-0.6b-v2
   device: cuda
