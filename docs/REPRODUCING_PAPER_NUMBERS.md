@@ -38,8 +38,18 @@ torch 2.11.0  numpy 2.2.6  scipy 1.15.3  librosa 0.11.0  transformers 5.4.0
 scikit-learn 1.7.2  soundfile 0.13.1  torchvision 0.26.0  numba 0.65.0
 ```
 
-identical in both lockfiles. Only `accelerate` and `psutil` were added — both
-already declared in the `rag` extra, just never locked.
+identical in both lockfiles, and still identical after the scope trim.
+
+Two non-numeric packages did move when the `rag` extra was dropped (it had
+pulled `accelerate`, which floored them): `packaging` 26.0 → 24.2 and `fsspec`
+2026.2.0 → 2025.12.0. Neither participates in any computation — `packaging`
+parses version strings, `fsspec` abstracts filesystem access. Verified by
+isolating the cause: removing the `vc` extra does not change them.
+
+The `asr` dependencies (NeMo, jiwer) live in `requirements-asr.txt`, not as an
+extra, precisely to keep them out of this resolution — adding NeMo to
+`pyproject.toml` dragged `fsspec` and `packaging` down for *every* environment,
+extras or not.
 
 **`paragraph_id` prefixing: zero numeric effect.** `evaluate_model_on_paragraph_groups`
 groups rows by `paragraph_id` in first-seen order, so prefixing every ID in a

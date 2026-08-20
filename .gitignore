@@ -180,3 +180,6 @@ results/*
 figures/*.png
 models/checkpoints/*.pt
 artifacts_user/
+
+# Raw corpora dropped into data/ by scripts/data/download_*.py
+data/*.json

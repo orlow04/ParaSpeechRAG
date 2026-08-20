@@ -16,10 +16,12 @@ model:
 
 optim:
   optimizer: Adam
-  learning_rate: 1.0e-4
-  batch_size_train: 32
+  learning_rate: 1.0e-4              # paper 4.1: 1e-4 — agrees
+  batch_size_train: 32               # paper 4.1: 32 — agrees
   batch_size_val: 16
-  num_epochs: 100
+  num_epochs: 100                    # DISAGREES with paper 4.1, which says 50.
+                                     # With early_stopping_patience 10 the run
+                                     # may have stopped anywhere. Unrecorded.
   lr_scheduler: StepLR
   lr_step_size: 10
 
@@ -48,10 +50,12 @@ init:
 # these, the training data behind every headline number is unreconstructable.
 run:
   dataset_pkl: TODO
-  n_spoken_squad_pairs: TODO         # paper reports 18,896 — a SUBSET of the
+  n_spoken_squad_pairs: TODO         # paper 4.1: 18,896 — a SUBSET of the
                                      # standard Spoken-SQuAD train split, so the
                                      # exact pair list must be released
-  n_voxpopuli_en_pairs: TODO         # paper reports 184,219
+  n_voxpopuli_en_pairs: TODO         # paper 4.1: 184,219. VoxPopuli is training
+                                     # only — 4.1 says it is "not directly used
+                                     # in the perturbation benchmark itself".
   epochs_actually_run: TODO
   seed: TODO                         # scripts/train.py does not currently set
                                      # a global seed — see docs/GAPS.md

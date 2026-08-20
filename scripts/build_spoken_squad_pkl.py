@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
-"""Constrói `total_dataset_spoken_squad.pkl` com pareamento correto:
+"""Build `total_dataset_spoken_squad.pkl` with correct text/audio pairing:
 
-texto = ``paragraphs[*]["context"]`` (transcrição)
-áudio = leitura desse contexto, distribuída em chunks ``{a}_{p}_*.wav``.
+text  = ``paragraphs[*]["context"]`` (the transcript)
+audio = the reading of that context, split across chunks ``{a}_{p}_*.wav``.
 
-Modos de pooling:
+Pooling modes (the two CLASP variants in the paper):
 
-* ``mean``     — Variante A: 1 amostra por parágrafo. Concatena os WAVs do
-                 parágrafo em um único waveform, extrai HuBERT (mean-pool sobre
-                 chunks de 20 s) e EfficientNet-B7 (mean-pool sobre janelas).
-* ``chunked``  — Variante B (estilo SPIRAL): 1 amostra por chunk individual.
-                 Texto do parágrafo é replicado para todos os chunks. A coluna
-                 ``paragraph_id`` permite agrupamento no eval (max-sim).
+* ``mean``     — one sample per paragraph. Concatenates the paragraph WAVs
+                 into a single waveform, then HuBERT (mean-pooled over 20 s
+                 chunks) and EfficientNet-B7 (mean-pooled over windows).
+* ``chunked``  — one sample per chunk. The paragraph text is replicated
+                 across its chunks; the ``paragraph_id`` column drives
+                 max-sim grouping at eval time (CLASP-chunked).
 
-Saída (por split):
-    text         : list[Tensor[1024]]    — embedding LaBSE
-    hubert-emb   : list[Tensor[1024]]    — HuBERT (mean sobre chunks de 20 s)
+Output (per split):
+    text         : list[Tensor[1024]]    — LaBSE sentence embedding
+    hubert-emb   : list[Tensor[1024]]    — HuBERT, mean-pooled over 20 s chunks
     image        : list[Tensor[1000]]    — EfficientNet-B7 logits (mean)
-    paragraph_id : list[str]             — "{article_idx}_{paragraph_idx}"
+    paragraph_id : list[str]             — "{split}:{article_idx}_{paragraph_idx}"
+    audio_paths  : list[list[str]]       — source WAVs backing each row
 
-Requer extras: `uv sync --extra realdata`
+Requires: `uv sync --extra realdata`
 """
 
 from __future__ import annotations
@@ -139,7 +140,7 @@ def build_split_dict_mean(
     chunk_batch_size: int,
     text_batch_size: int,
 ) -> dict:
-    """Variante A: 1 amostra por parágrafo, mean-pool de chunks."""
+    """CLASP-mean: one sample per paragraph, mean-pooled over chunks."""
     texts: list[str] = []
     hubert_list: list[torch.Tensor] = []
     image_list: list[torch.Tensor] = []
@@ -194,7 +195,7 @@ def build_split_dict_chunked(
     chunk_batch_size: int,
     text_batch_size: int,
 ) -> dict:
-    """Variante B (SPIRAL-like): 1 amostra por chunk, texto do parágrafo replicado."""
+    """CLASP-chunked: one sample per chunk, paragraph text replicated."""
     flat_texts: list[str] = []
     hubert_list: list[torch.Tensor] = []
     image_list: list[torch.Tensor] = []

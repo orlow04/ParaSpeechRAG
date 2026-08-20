@@ -1,0 +1,20 @@
+# ASR cascade: Parakeet TDT transcription (scripts/asr/transcribe.py) and WER
+# scoring (scripts/asr/compute_wer.py).
+#
+# Deliberately NOT a [project.optional-dependencies] extra. NeMo pins a wide
+# range of shared packages, and adding it to pyproject.toml drags the whole
+# project resolution down with it — `uv lock` moved fsspec 2026.2.0 -> 2025.12.0
+# and packaging 26.0 -> 24.2 for every environment, extras or not. Keeping it in
+# a separate requirements file leaves the main lock untouched.
+#
+# Install into its own venv on the eval box:
+#     uv venv --python 3.12 .venv-asr
+#     VIRTUAL_ENV=.venv-asr uv pip install -r requirements-asr.txt
+#     VIRTUAL_ENV=.venv-asr uv pip install -e . --no-deps
+#
+# Model: nvidia/parakeet-tdt-0.6b-v2 (paper 3.2). Needs a CUDA GPU.
+
+nemo_toolkit[asr]
+jiwer
+pyyaml
+huggingface-hub

@@ -52,21 +52,28 @@ Consequences:
   mechanical — but it has not been done, and no retrieval results for those
   axes exist in this repo.
 
-### 1.1 The two VC systems used different target voices — CONFIRMED
+### 1.1 GenVC used a voice the paper never mentions — CONFIRMED AGAINST THE PAPER
 
-| | Seed-VC (`experiments/run_seedvc_all_voices.sh`) | GenVC (`scripts/data/download_references.py`) |
-|---|---|---|
-| LibriSpeech 1 | `2803-154320-0012` | `2803-154320-0012` |
-| LibriSpeech 2 | `3081-166546-0023` | `3081-166546-0023` |
-| LibriSpeech 3 | `6319-275224-0006` | `6319-275224-0006` |
-| LibriSpeech 4 | **`1089-134686-0000`** | **`8842-302201-0002`** |
-| Non-corpus | `azuma`, `trump` | `azuma_0`, `trump_0` |
+§4.4 states the target speakers are "four LibriSpeech voices (IDs 1089, 2803,
+3081, and 6319) alongside two additional Seed-VC reference voices (Azuma and
+Trump)". Table 2 lists exactly those six rows.
 
-Three of four LibriSpeech speakers match; the fourth does not. If Table 2
-reports a mean over Seed-VC and GenVC on "the same six target voices", that
-premise is false. Either regenerate one system on the other's voice set, or
-report per-system results rather than the mean — which the review flagged as a
-near-certain reviewer question anyway.
+| | Paper §4.4 / Table 2 | Seed-VC launcher | GenVC `download_references.py` |
+|---|---|---|---|
+| LibriSpeech 1 | 2803 | `2803-154320-0012` | `2803-154320-0012` |
+| LibriSpeech 2 | 3081 | `3081-166546-0023` | `3081-166546-0023` |
+| LibriSpeech 3 | 6319 | `6319-275224-0006` | `6319-275224-0006` |
+| LibriSpeech 4 | **1089** | `1089-134686-0000` | **`8842-302201-0002`** |
+| Non-corpus | Azuma, Trump | `azuma`, `trump` | `azuma_0`, `trump_0` |
+
+Seed-VC matches the paper. **GenVC does not**: it converted to speaker 8842,
+which appears nowhere in the paper, and never converted to 1089.
+
+Table 2's caption reads "Mean of Models" — i.e. averaged over Seed-VC and
+GenVC. If GenVC never produced a 1089 condition, the `1089` row cannot be a
+mean over both systems, and the other rows average over a voice set that
+differs between the two systems. Either regenerate GenVC on 1089, or report
+per-system results instead of the mean and say which voices each system used.
 
 ### 1.2 The GenVC source set is a deliberate ~3k subset
 
@@ -128,7 +135,9 @@ finding. No such control exists here.
 
 ## 3. Findings that affect reported numbers
 
-### 3.1 Reverberation is not evaluated at any SNR — CONFIRMED
+### 3.1 The reverb axis is inverted and near-inert, and §5.3 interprets the artifact — CONFIRMED AGAINST THE PAPER
+
+This is the most consequential finding. It is not just a labelling problem.
 
 `scripts/run_noise_robustness_eval.py` maps the SNR flag onto a decay time:
 
@@ -137,15 +146,48 @@ if noise_type == "reverb":
     return add_reverberation(y, decay_time_ms=snr * 10)
 ```
 
-A results row tagged `reverb_20.0` is a **200 ms decay tail**, not a 20 dB SNR.
-The reverb series therefore does not share an axis with the white and ambient
-series, and plotting all three against a common "SNR (dB)" axis mislabels the
-reverb curve. Additionally `add_reverberation` peak-normalises its output to
-0.95, so it changes signal gain — the additive noise functions do not.
+So the sweep is:
 
-The behaviour is preserved as-is (changing it would invalidate existing
-results) but is now documented at the call site, in
+| Results row | Actual decay tail | Early reflection? | RMS deviation from clean |
+|---|---|---|---|
+| `reverb_20.0` | 200 ms | yes | 0.2965 |
+| `reverb_15.0` | 150 ms | yes | 0.2936 |
+| `reverb_10.0` | 100 ms | yes | 0.2854 |
+| `reverb_5.0`  |  50 ms | **no** | 0.2824 |
+
+Three separate problems:
+
+1. **Severity runs backwards.** As the label falls 20 → 5 — which every reader
+   parses as *increasing* degradation — the reverb tail *shortens*, so the
+   perturbation gets *milder*.
+2. **The swept parameter barely does anything.** Deviation moves only 5% across
+   the whole sweep (0.2965 → 0.2824). Compare white noise over the same labels:
+   0.0100 → 0.0560, a 5.6× increase. The reverb curve is flat because the knob
+   is inert in this range, not because reverberation saturates.
+3. **The endpoint is structurally different.** At 50 ms, `early_idx` (800
+   samples) is not `< len(rir)` (800), so the early reflection is silently
+   dropped. The mildest condition uses a different impulse response shape from
+   the other three.
+
+The large *constant* offset — the paper reports Recall@1 pinned between 0.420
+and 0.435 across all reverb severities — is consistent with
+`add_reverberation` peak-normalising its output to 0.95. That is a gain change
+the additive noise functions never apply, and it dominates the transform.
+
+**§5.3 of the paper explains the flat curve physically:** "reverberation
+preserves much of the underlying speech content while redistributing it
+temporally. Consequently, retrieval degradation saturates early instead of
+collapsing progressively with severity." That conclusion is drawn from an axis
+that is inverted, near-inert, and inconsistent at its endpoint. §4.2's
+"Reverberation is simulated through delayed room reflections at equivalent
+severity levels" is the only description given, and "equivalent severity
+levels" is not a specification.
+
+The code behaviour is preserved as-is — changing it would invalidate existing
+results — but it is documented at the call site, in
 `src/paraspeechrag/perturb/noise.py`, and in `configs/perturb/noise.yaml`.
+**A real reverb sweep needs a decay-time axis (or measured RIRs) and a
+re-run**; the current Figure 1 reverb panel should not ship as is.
 
 ### 3.2 Perturbed audio may cover a far smaller corpus than the clean baseline — NEEDS VERIFICATION ON THE GPU BOX
 
@@ -256,21 +298,52 @@ instead.
 
 ## 4. Documentation and release items still open
 
-These are from the review and are **not** addressed by this port — they need
-decisions, not code:
+All of these were re-checked against the PDF at port time. They need decisions,
+not code.
 
-- **Number of evaluation queries is never stated.** Only the 2,067-paragraph
-  corpus size is given. Recall@k is uninterpretable without the query count.
+- **Number of evaluation queries is never stated.** §3.4 gives only the
+  2,067-paragraph corpus and "each query is ranked against the entire
+  validation pool". Recall@k is uninterpretable without the query count.
   `run_noise_robustness_eval.py` now emits `n_queries` into its `.meta.json`.
-- **SNR levels conflict across the paper**: §3.3 lists four (20/15/10/~5),
-  §4.2 lists three (20/10/5), Figure 1's axis reads 0/5/10/20. The code default
-  is `20,15,10,5`; `experiments/run_noise_ambient.sh` overrides to `20,10,5`.
-- **Noise classes conflict**: §3.3 describes white + reverb, §4.2 describes
-  three classes including ESC-50 ambient. The code supports all three.
-- **CLASP-mean MRR** is 0.971 in Table 1 and 0.972 in §5.2 / Table 2.
-- **Figure 1's legend says "SpeechRAG"** — internal code name leaking into the
-  figure. See `docs/NAMING.md`.
-- **Figure 1's caption is a placeholder.**
+- **SNR levels conflict** — VERIFIED. §3.3 says "four SNR levels: 20, 15, 10,
+  and ∼5 dB"; §4.2 says "20, 10, and 5 dB SNR levels, corresponding to mild,
+  moderate, and severe". The code default is `20,15,10,5`;
+  `experiments/run_noise_ambient.sh` overrides to `20,10,5`.
+- **Noise classes conflict** — VERIFIED. §3.3 says "white noise and convolutive
+  reverberation"; §4.2 says "white noise, ambient environmental noise, and
+  reverberation". The code supports all three.
+- **CLASP-mean MRR** — VERIFIED. Table 1 reports 0.971; §5.2 and Table 2's
+  "WAV (Original/Baseline)" row both report 0.972.
+- **Figure 1's caption is a placeholder** — VERIFIED. It currently reads: "It
+  describes the 5 subframes (codec, rate, white noise, reverb, ambient),
+  identifies solid lines (MRR) vs. dashed lines (Recall@1), maps CLASP vs. ASR,
+  and explains the x-axis orientation in each subframe." That is a description
+  of what the caption should contain, not a caption.
+- **Figure 1's legend reportedly says "SpeechRAG"** — NOT VERIFIABLE from the
+  PDF's extracted text (legends live inside the figure image). Flagged in the
+  original review. The paper's title is *ParaSpeechRAG*, so a `SpeechRAG`
+  legend would be a stale internal code name. Check the plotting source. See
+  `docs/NAMING.md`.
+- **Recall@k ≡ Hits@k is already documented** — footnote 1 states it, and that
+  MAP coincides with MRR. `docs/NAMING.md` agrees with the paper here; no
+  action needed beyond keeping them in sync.
+- **Emotion audio is 22.05 kHz, not 16 kHz** — NEW. §4.5 states "All converted
+  audio is resampled to 16 kHz". Every WAV under
+  `data/datasets/spoken_squad_emotions/*/*/` is 22050 Hz. (The noise sets under
+  `dev_wav_noisy_by_type/` *are* 16 kHz.) Harmless for results —
+  `load_mono_16k_padded` resamples on the way in — but the sentence is false as
+  written. Either fix the sentence or resample the released audio.
+- **Training epochs disagree with the code** — NEW. §4.1 says "50 epochs";
+  `scripts/train.py` defaults to `--num-epochs 100` with early-stopping
+  patience 10. Whether the released checkpoint ran 50 or stopped early at some
+  other count is unrecorded. See `configs/train/clasp.yaml`.
+- **Results exist for systems with no code here** — NEW. Table 1 reports CLAP
+  (0.000/0.001/0.002/0.001) and GLAP (0.209/0.366/0.442/0.289); §5.3 reports
+  codec numbers (MP3 8 kbps → 0.885/0.927) and rate numbers (0.5× → 0.674,
+  2.0× → 0.630); §5.3 reports ambient noise at 5 dB → 0.301/0.389. Those runs
+  happened somewhere. Nothing in this repository can regenerate the CLAP,
+  GLAP, or ASR-retrieval numbers, and the codec/rate generators here have no
+  evaluation attached (§1). Recover that code or the numbers are unbacked.
 - **Sampling-rate story is inconsistent** — now verifiable in code: Opus decodes
   with a forced `-ar 24000` (`scripts/perturb/codec_opus.py`), MP3 decodes at
   the source rate with no `-ar` flag (`codec_mp3.py`), the rate axis preserves

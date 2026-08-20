@@ -28,20 +28,21 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run CLASP retrieval evaluation.")
     parser.add_argument(
         "--mode",
-        choices=["candidate", "matrix", "spiral", "paragraph_grouped"],
+        choices=["candidate", "matrix", "paragraph_grouped"],
         default="candidate",
         help=(
-            "spiral: JSONL + on-the-fly embeddings. "
-            "candidate/matrix: pickle dataset (1 amostra por linha). "
-            "paragraph_grouped: pickle 'chunked' c/ paragraph_id; max-sim por par\u00e1grafo."
+            "candidate: pickle dataset, one sample per row, ranked against a "
+            "candidate pool. matrix: full similarity matrix from precomputed "
+            "embeddings. paragraph_grouped: 'chunked' pickle with paragraph_id; "
+            "max-sim per paragraph."
         ),
     )
     parser.add_argument(
         "--dataset-path",
         required=True,
-        help="Pickle total_dataset path (candidate/matrix) or SPIRAL data.jsonl (spiral)",
+        help="Path to a total_dataset pickle",
     )
-    parser.add_argument("--model-path", help="Required for candidate and spiral modes")
+    parser.add_argument("--model-path", help="Required for candidate and paragraph_grouped modes")
     parser.add_argument("--audio-key", default="hubert-emb")
     parser.add_argument("--text-key", default="text")
     parser.add_argument("--emb-key", default="clasp_emb", help="Embedding key for matrix mode")
@@ -67,61 +68,8 @@ def parse_args():
         default="1,5,10,50",
         help="Comma-separated K values for Hits@K in ranking metrics and plot.",
     )
-    # SPIRAL-only
-    parser.add_argument(
-        "--spiral-audio-base",
-        type=Path,
-        default=None,
-        help="Base directory to resolve SPIRAL wav paths (default: parent of JSONL)",
-    )
-    parser.add_argument(
-        "--spiral-output-dir",
-        type=Path,
-        default=ROOT / "results" / "spiral",
-        help="Output directory for SPIRAL plots and JSON",
-    )
-    parser.add_argument(
-        "--max-samples",
-        type=int,
-        default=None,
-        help="SPIRAL: cap number of samples",
-    )
-    parser.add_argument(
-        "--batch-size-text",
-        type=int,
-        default=32,
-        help="SPIRAL: SentenceTransformer encode batch size",
-    )
-    parser.add_argument(
-        "--spiral-chunk-batch-size",
-        type=int,
-        default=1,
-        help=(
-            "SPIRAL: batch multiple same-file time chunks (HuBERT + EfficientNet) per forward. "
-            "Helps long wavs; short clips (single chunk) see little change."
-        ),
-    )
-    parser.add_argument(
-        "--spiral-batch-size-fusion",
-        type=int,
-        default=32,
-        help="SPIRAL: batch size for CLASP fusion encoder over rows of HuBERT+spec vectors.",
-    )
     parser.add_argument("--hubert-model", default="facebook/hubert-large-ls960-ft")
     parser.add_argument("--sentence-transformer", default="sentence-transformers/LaBSE")
-    parser.add_argument(
-        "--spiral-audio-pooling",
-        type=str,
-        default="mean",
-        choices=["mean", "max_sim"],
-        help="SPIRAL: mean = global mean over time chunks; max_sim = ColBERT-style max over chunks.",
-    )
-    parser.add_argument(
-        "--spiral-chunk-samples",
-        type=int,
-        default=320_000,
-        help="SPIRAL: window size in samples (16 kHz) for HuBERT/EfficientNet and timestamp→chunk map.",
-    )
     return parser.parse_args()
 
 
@@ -132,32 +80,6 @@ def _parse_hits_k(s: str) -> list[int]:
 def main():
     args = parse_args()
     device = get_default_device()
-
-    if args.mode == "spiral":
-        from paraspeechrag.eval.spiral_runner import run_spiral_retrieval_eval  # noqa: E402
-        if not args.model_path:
-            raise ValueError("--model-path is required for spiral mode")
-        dp = Path(args.dataset_path)
-        if not dp.is_file():
-            raise FileNotFoundError(f"SPIRAL JSONL not found: {dp}")
-        run_spiral_retrieval_eval(
-            dp,
-            Path(args.model_path),
-            Path(args.spiral_output_dir),
-            audio_base_dir=args.spiral_audio_base,
-            extra_search_roots=(ROOT,),
-            max_samples=args.max_samples,
-            batch_size_text=args.batch_size_text,
-            chunk_batch_size_audio=args.spiral_chunk_batch_size,
-            batch_size_fusion=args.spiral_batch_size_fusion,
-            hubert_model_id=args.hubert_model,
-            sentence_model_id=args.sentence_transformer,
-            device=device,
-            hits_ks=_parse_hits_k(args.hits_k),
-            chunk_samples=args.spiral_chunk_samples,
-            audio_pooling=args.spiral_audio_pooling,
-        )
-        return
 
     with open(args.dataset_path, "rb") as f:
         total_dataset = pickle.load(f)

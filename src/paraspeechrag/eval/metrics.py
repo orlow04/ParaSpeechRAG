@@ -208,7 +208,7 @@ def evaluate_model_on_paragraph_groups(
     Each row of ``test_data`` is one *chunk*; rows sharing ``paragraph_id`` form
     a single paragraph candidate. Query = LaBSE text embedding (one per
     paragraph). Candidate score = max cosine over fused chunk embeddings of
-    that paragraph (ColBERT/SPIRAL-style).
+    that paragraph (ColBERT-style late interaction).
 
     Returns a dict with Hits@K, MRR, MAP, mean_rank, median_rank.
     """

@@ -1,7 +1,16 @@
 # ParaSpeechRAG
 
-A perturbation-robustness benchmark for speech retrieval, built around
-**CLASP** (Contrastive Language-Speech Pretraining, ECIR 2025).
+Code for **"ParaSpeechRAG: A Benchmark for Robust Speech Retrieval under
+Paralinguistic and Acoustic Perturbations"** (ACL/EMNLP submission).
+
+A counterfactual robustness benchmark that isolates non-semantic acoustic
+factors while preserving lexical content, evaluated over Spoken-SQuAD with
+**CLASP** (Abootorabi & Asgari, ECIR 2025) as the primary retriever.
+
+Scope is the paper's: the retrieval stage only. Original-CLASP material
+(notebooks, SpeechBrown, SPIRAL, MSEB/SVQ, end-to-end RAG generation) lives in
+the CLASP repo, not here — the paper's Limitations state the evaluation
+"focuses exclusively on the retrieval stage".
 
 > **Do the ported numbers still match the paper?** Audited file by file in
 > [`docs/REPRODUCING_PAPER_NUMBERS.md`](docs/REPRODUCING_PAPER_NUMBERS.md).
@@ -30,8 +39,8 @@ perturbed audio, and **evaluating** retrieval over it.
 | Table 3 — emotion variation | ❌ no generator | `make eval-emotion` | ⚠️ eval only; audio produced out-of-tree |
 | Codec — MP3 / Opus | `make perturb-codec` | ❌ not wired up | ⚠️ generator only |
 | Rate — time stretch | `make perturb-rate` | ❌ not wired up | ⚠️ generator only |
-| ASR robustness (WER) | — | `make asr-transcribe && make asr-wer` | ⚠️ WER only, no retrieval |
-| ASR cascade retrieval / GLAP / CLAP | — | — | ❌ not implemented |
+| ASR robustness (WER) | — | `make asr-transcribe && make asr-wer` | ⚠️ WER only — the LaBSE retrieval half is missing |
+| Table 1 — ASR cascade / GLAP / CLAP rows | — | — | ❌ results exist in the paper, no code here |
 
 `make help` lists every target. Exact parameters per axis live in
 `configs/perturb/*.yaml`.
@@ -89,8 +98,6 @@ src/paraspeechrag/
   inference/     HuBERT + EfficientNet-B7 embedding, audio preprocessing
   data/          dataset wrappers, path resolution
   train/         contrastive trainer
-  mseb_adapter/  CLASP encoder for the MSEB / SVQ benchmark (Python 3.12)
-  rag/           SVQ end-to-end RAG (retrieval + LLM generation)
 scripts/
   build_*_pkl.py       dataset → embedded PKL
   run_*_eval.py        retrieval / noise-robustness evaluation
@@ -106,7 +113,8 @@ data/
   corpus/    frozen paragraph lists      splits/     paragraph ID lists
   manifests/ per-file checksums          datasets/   audio + built PKLs (gitignored)
 results/     per-condition metrics; legacy_* are carried over from the old repo
-docs/        GAPS, NAMING, DATA_LICENSES, TRAINING, EVAL, MSEB, ROADMAP
+docs/        GAPS, NAMING, DATA_LICENSES, REPRODUCING_PAPER_NUMBERS,
+             TRAINING, EVAL, ROADMAP
 ```
 
 ## Metric naming
@@ -115,21 +123,18 @@ The code says `Hits@k`; the paper says `Recall@k`. They are the same number —
 there is exactly one relevant item per query, so recall at cutoff *k* is the
 indicator that the gold item ranked ≤ *k*. For the same reason `MAP` equals
 `MRR`, and `compute_ranking_metrics` returns both keys with one value. Full
-table in [`docs/NAMING.md`](docs/NAMING.md), which also covers the
-`SpeechRAG` → `ParaSpeechRAG` rename (Figure 1's legend still says
-`SpeechRAG`).
+table in [`docs/NAMING.md`](docs/NAMING.md). The paper states this itself in
+footnote 1, so code and paper agree here.
 
 ## Environment
 
 ```bash
 uv sync                       # base
-uv sync --extra realdata      # Spoken-SQuAD / SpeechBrown  (Python 3.10)
+uv sync --extra realdata      # Spoken-SQuAD embedding stack
 uv sync --extra voxpopuli     # VoxPopuli
-uv sync --extra rag           # SVQ end-to-end RAG (needs CUDA)
+# ASR cascade deps are NOT an extra — see requirements-asr.txt
+uv sync --extra vc            # torchaudio, for the GenVC driver
 ```
-
-The MSEB / SVQ extra needs Python ≥ 3.12 and a separate virtualenv — see
-[`docs/MSEB.md`](docs/MSEB.md).
 
 ## Checkpoints
 
