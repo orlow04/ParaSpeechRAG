@@ -10,8 +10,8 @@ into this repository.
 
 ## 1. Perturbation axes
 
-The paper reports five perturbation axes. **Four have generators here; one
-does not.**
+The paper reports five perturbation axes. **All five now have generators
+here.** Two of them are still not wired to any evaluation.
 
 The codec, rate and GenVC generators came from a second codebase
 (`codigos_matheus/`) that was merged in during the port. They were never part
@@ -25,8 +25,8 @@ of the CLASP repo's history, which is why the launcher scripts in
 | Codec — Opus | ✅ `scripts/perturb/codec_opus.py` | written to `<out>/<N>kbps/` | ffmpeg + libopus, same bitrates, decoded at **24 kHz** |
 | Rate (time-stretch) | ✅ `scripts/perturb/speed.py` | written to `<out>/<factor>x/` | librosa phase vocoder, SRB 8 factors (arXiv:2403.07937) |
 | Speaker — GenVC | ✅ `scripts/perturb/voice_convert_genvc.py` | written to `<out>/<ref>/` | `GenVC_large`, `top_k=15`, 6 reference voices |
-| Speaker — Seed-VC | ❌ none | consumed from `data/datasets/spoken_squad_seed-vc/<voice>/` | Generation happened out-of-tree; no code, config or seed preserved |
-| Emotion (Seed-VC v2) | ❌ none | consumed from `data/datasets/spoken_squad_emotions/<emotion>/<intensity>/` | Same |
+| Speaker — Seed-VC | ✅ `scripts/perturb/seedvc/batch_convert.py` | consumed from `data/datasets/spoken_squad_seed-vc/<voice>/` | 30 diffusion steps, CFG 0.7, length-adjust 1.0. Runs from a Seed-VC checkout — see §1.3 |
+| Emotion (Seed-VC v2) | ✅ `scripts/perturb/seedvc/batch_convert_v2.py` | consumed from `data/datasets/spoken_squad_emotions/<emotion>/<intensity>/` | `convert_style=True`, RAVDESS Actor 01, 7 conditions — see §1.3 |
 
 Exact parameters for each axis are recorded in `configs/perturb/*.yaml`.
 
@@ -38,8 +38,9 @@ Consequences:
   depends on the ffmpeg/libmp3lame/libopus build, and the rate path on the
   librosa version. This is why the released **audio** is the artifact and the
   generator code is provenance. Pin it with `scripts/build_manifest.py`.
-- **The Seed-VC speaker and emotion conditions cannot be regenerated at all**
-  from this repository — only re-evaluated against existing audio.
+- **The Seed-VC generators must run from a Seed-VC checkout**, not from this
+  repo — they import upstream modules and read `configs/v2/vc_wrapper.yaml`
+  relative to that root. See `scripts/perturb/seedvc/README.md`.
 - **The noise conditions have no released audio.** They are generated in-memory
   by `scripts/run_noise_robustness_eval.py`, which re-embeds the noisy waveform
   and discards it. Generation is now seeded (§3.5) but still depends on the
@@ -83,6 +84,40 @@ That is ~3k source audios × 6 references ≈ 18k outputs — **not** full cover
 of the dev split. See §3.2: this makes the candidate pool for the GenVC
 conditions smaller than the clean baseline's by construction, and the pool size
 must be reported alongside any Recall@k from it.
+
+### 1.3 Seed-VC generators, vendored and verified
+
+`scripts/perturb/seedvc/` holds the project-specific scripts from a Seed-VC
+checkout (`seed-vc-test/`, ~1.1 GB, kept outside this repo). Upstream Seed-VC
+code, checkpoints and reference audio are deliberately not vendored — see that
+folder's README for why and for how to run them.
+
+Reading this code settles four open questions:
+
+| Paper claim | Verdict |
+|---|---|
+| §3.3 Seed-VC: 30 diffusion steps, CFG 0.7, length-adjust 1.0 | ✅ confirmed (`batch_convert.py:91-93` defaults) |
+| §4.4 speaker targets 1089 / 2803 / 3081 / 6319 + Azuma + Trump | ✅ confirmed — `references_neutral/` holds exactly those six, **including 1089** |
+| §4.5 emotion: Seed-VC v2, Actor 01, four categories, seven conditions | ✅ confirmed — `run_ravdess_actor01_background.sh` passes `--target-actors 1 --target-emotions angry,happy,neutral,sad --convert-style true`; `references_ravdess/` gives neutral×1 + happy×2 + sad×2 + angry×2 = 7 |
+| §3.3 / §4.5: converted audio is 16 kHz | ❌ **false** — see below |
+
+**The 16 kHz claim is wrong.** `batch_convert.py:132` is
+
+```python
+sr = 44100 if args.f0_condition else 22050
+```
+
+`--f0-condition` defaults to `False`, and the result is written with
+`torchaudio.save(out, audio_tensor, out_sr)` where `out_sr = sr`. Seed-VC
+writes **22,050 Hz and never resamples**, which matches the released audio
+(every WAV under `data/datasets/spoken_squad_emotions/*/*/` is 22,050 Hz).
+Results are unaffected — `load_mono_16k_padded` resamples on the way into the
+retriever — but §4.5's "All converted audio is resampled to 16 kHz" and §3.3's
+"output → 16 kHz" both need correcting.
+
+This also sharpens §1.1: Seed-VC's reference set matches the paper exactly, so
+GenVC's `8842-302201-0002` is unambiguously the outlier, not a documentation
+slip on the Seed-VC side.
 
 ---
 
@@ -327,12 +362,14 @@ not code.
 - **Recall@k ≡ Hits@k is already documented** — footnote 1 states it, and that
   MAP coincides with MRR. `docs/NAMING.md` agrees with the paper here; no
   action needed beyond keeping them in sync.
-- **Emotion audio is 22.05 kHz, not 16 kHz** — NEW. §4.5 states "All converted
-  audio is resampled to 16 kHz". Every WAV under
+- **Emotion audio is 22.05 kHz, not 16 kHz** — VERIFIED IN CODE (§1.3). §4.5
+  states "All converted audio is resampled to 16 kHz"; §3.3 says the same for
+  Seed-VC. `scripts/perturb/seedvc/batch_convert.py:132` writes 22050 Hz and
+  never resamples, and every WAV under
   `data/datasets/spoken_squad_emotions/*/*/` is 22050 Hz. (The noise sets under
   `dev_wav_noisy_by_type/` *are* 16 kHz.) Harmless for results —
-  `load_mono_16k_padded` resamples on the way in — but the sentence is false as
-  written. Either fix the sentence or resample the released audio.
+  `load_mono_16k_padded` resamples on the way in — but both sentences are false
+  as written. Fix the text, or regenerate with an explicit resample.
 - **Training epochs disagree with the code** — NEW. §4.1 says "50 epochs";
   `scripts/train.py` defaults to `--num-epochs 100` with early-stopping
   patience 10. Whether the released checkpoint ran 50 or stopped early at some
@@ -369,3 +406,41 @@ not code.
   public artifact. It is still in the default `VOICES` list in
   `experiments/run_seedvc_all_voices.sh`; dropping it means regenerating that
   condition and re-running Table 2, so decide before freezing.
+
+
+
+
+n sync at e3c4f33, working tree clean. Clone on the 4090 will pick up everything.
+
+  When you go looking for the remaining code on that box, here's what docs/GAPS.md currently says is missing — worth grabbing in one pass rather than discovering
+  piecemeal:
+
+  When you go looking for the remaining code on that box, here's what docs/GAPS.md currently says is missing — worth grabbing in one pass rather than discovering piecemeal:
+
+  Produces numbers in the paper, no code anywhere here:
+  - CLAP retriever — Table 1 row 0.000 / 0.001 / 0.002 / 0.001
+  When you go looking for the remaining code on that box, here's what docs/GAPS.md currently says is missing — worth grabbing in one pass rather than discovering
+  piecemeal:
+
+  Produces numbers in the paper, no code anywhere here:
+  - CLAP retriever — Table 1 row 0.000 / 0.001 / 0.002 / 0.001
+  - GLAP retriever — Table 1 row 0.209 / 0.366 / 0.442 / 0.289
+  - ASR cascade retrieval half — transcripts → LaBSE → ranking. scripts/asr/transcribe.py gets you Parakeet transcripts and compute_wer.py scores WER, but
+  nothing turns those into Recall@k. This is the entire Cascade column of Tables 2 and 3.
+  - Codec eval — §5.3 quotes MP3 8 kbps → 0.885 / 0.927. Generators are here; nothing evaluates their output.
+  - Rate eval — §5.3 quotes 0.5× → 0.674, 2.0× → 0.630. Same situation.
+  - Figure 1 plotting code — worth checking whether the legend really says SpeechRAG; I couldn't read it from the PDF text layer.
+
+  Would settle open questions:
+  - Seed-VC generation script — the emotion and Seed-VC speaker audio was made out-of-tree
+  - The 18,896-pair Spoken-SQuAD training subset list
+  - The checkpoint that actually produced Table 1, plus its hash
+
+  Also worth running there, since it answers the biggest unknown cheaply:
+
+  make check-coverage
+
+  If the perturbed sets on that box cover all 2,067 paragraphs, GAPS §3.2 closes. If they cover 91 like the local copies, the perturbed Recall@k figures are on a
+  different candidate pool than the clean baseline, and the ΔR@1 values in the paper need recomputing.
+
+  Send me whatever you pull back and I'll wire it in and update GAPS accordingly — leaving the commits to you.

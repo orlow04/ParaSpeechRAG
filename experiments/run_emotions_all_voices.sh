@@ -40,9 +40,28 @@ cd "$ROOT"
 
 COMBOS="${COMBOS:-angry/normal angry/strong happy/normal happy/strong neutral/normal sad/normal sad/strong}"
 POOLING_MODE="${POOLING_MODE:-mean}"
-MODEL="${MODEL:-${ROOT}/models/checkpoints/clasp_spoken_squad%2Bvoxpopuli.pt}"
+# The checkpoint ships under two spellings depending on how it was fetched:
+# a literal "+" or the URL-encoded "%2B". Accept either.
+if [[ -z "${MODEL:-}" ]]; then
+    for _cand in "clasp_spoken_squad+voxpopuli.pt" "clasp_spoken_squad%2Bvoxpopuli.pt"; do
+        if [[ -f "${ROOT}/models/checkpoints/${_cand}" ]]; then
+            MODEL="${ROOT}/models/checkpoints/${_cand}"; break
+        fi
+    done
+    MODEL="${MODEL:-${ROOT}/models/checkpoints/clasp_spoken_squad+voxpopuli.pt}"
+fi
 SKIP_NOISE="${SKIP_NOISE:-1}"
 MAX_PARALLEL="${MAX_PARALLEL:-3}"
+
+# ALLOW_SHARED_WAV_DIR=1 reproduces the pre-fix behaviour: the perturbed audio
+# is passed as BOTH --train-wav-dir and --val-wav-dir. That is what produced the
+# existing numbers, and it is a genuine contamination bug (docs/GAPS.md 3.3).
+# Use it only to check what the old numbers were.
+ALLOW_SHARED_WAV_DIR="${ALLOW_SHARED_WAV_DIR:-0}"
+SHARED_ARGS=()
+if [[ "$ALLOW_SHARED_WAV_DIR" == "1" ]]; then
+    SHARED_ARGS=(--allow-shared-wav-dir)
+fi
 
 TRAIN_JSON="${ROOT}/data/datasets/spoken_squad/spoken_train-v1.1.json"
 VAL_JSON="${ROOT}/data/datasets/spoken_squad/spoken_test-v1.1.json"
@@ -53,8 +72,13 @@ mkdir -p "${ROOT}/logs"
 [[ -f "$MODEL" ]]           || { echo "ERROR: model not found: $MODEL"; exit 1; }
 [[ -f "$TRAIN_JSON" ]]      || { echo "ERROR: JSON not found: $TRAIN_JSON"; exit 1; }
 [[ -f "$VAL_JSON" ]]        || { echo "ERROR: JSON not found: $VAL_JSON"; exit 1; }
-[[ -d "$TRAIN_WAV_DIR" ]]   || { echo "ERROR: clean train audio not found: $TRAIN_WAV_DIR
-Set TRAIN_WAV_DIR to the directory holding the unperturbed Spoken-SQuAD train WAVs."; exit 1; }
+[[ -d "$TRAIN_WAV_DIR" || "$ALLOW_SHARED_WAV_DIR" == "1" ]] || { echo "ERROR: clean train audio not found: $TRAIN_WAV_DIR
+Set TRAIN_WAV_DIR to the unperturbed Spoken-SQuAD train WAVs, e.g.:
+    TRAIN_WAV_DIR=/path/to/train_wav bash $0
+
+Or, to reproduce the pre-fix behaviour exactly (perturbed audio as BOTH splits,
+which is what produced the existing numbers -- see docs/GAPS.md 3.3):
+    TRAIN_WAV_DIR=<the same perturbed dir> ALLOW_SHARED_WAV_DIR=1 bash $0"; exit 1; }
 
 echo "============================================================"
 echo "  emotions all-combos pipeline (parallel)"
@@ -64,6 +88,7 @@ echo "  Eval model    : ${MODEL}"
 echo "  Train wav dir : ${TRAIN_WAV_DIR}  (clean)"
 echo "  Max parallel  : ${MAX_PARALLEL}"
 echo "  Skip noise    : ${SKIP_NOISE}"
+echo "  Shared wav dir: ${ALLOW_SHARED_WAV_DIR}  (1 = reproduce pre-fix contamination)"
 echo "============================================================"
 echo ""
 
@@ -91,13 +116,17 @@ for COMBO in $COMBOS; do
             echo "[${TAG}] PKL already exists, skipping build."
         else
             echo "[${TAG}] Building PKL ..."
+            # Pre-fix reproduction reads the SAME perturbed dir for both splits.
+            EFFECTIVE_TRAIN_WAV_DIR="$TRAIN_WAV_DIR"
+            [[ "$ALLOW_SHARED_WAV_DIR" == "1" ]] && EFFECTIVE_TRAIN_WAV_DIR="$WAV_DIR"
             python scripts/build_spoken_squad_pkl.py \
                 --train-json    "$TRAIN_JSON" \
-                --train-wav-dir "$TRAIN_WAV_DIR" \
+                --train-wav-dir "$EFFECTIVE_TRAIN_WAV_DIR" \
                 --val-json      "$VAL_JSON" \
                 --val-wav-dir   "$WAV_DIR" \
                 --output        "$PKL" \
-                --pooling-mode  "$POOLING_MODE"
+                --pooling-mode  "$POOLING_MODE" \
+                ${SHARED_ARGS[@]+"${SHARED_ARGS[@]}"}
             echo "[${TAG}] PKL ready."
         fi
 

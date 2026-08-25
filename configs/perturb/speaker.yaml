@@ -39,7 +39,9 @@ genvc:
 
 # --- Seed-VC ----------------------------------------------------------------
 seedvc:
-  implemented: false           # no generation script in this repository
+  implemented: true            # scripts/perturb/seedvc/batch_convert.py
+  generator: scripts/perturb/seedvc/batch_convert.py
+  upstream: https://github.com/Plachtaa/seed-vc  (must run from that checkout)
   audio_consumed_from: data/datasets/spoken_squad_seed-vc/<voice>/
   eval_driver: experiments/run_seedvc_all_voices.sh
   reference_voices:
@@ -49,19 +51,23 @@ seedvc:
     - 2803-154320-0012         # LibriSpeech
     - 3081-166546-0023         # LibriSpeech
     - 6319-275224-0006         # LibriSpeech
-  paper_parameters:            # from the paper; NOT verifiable against code here
-    diffusion_steps: 30
-    cfg_rate: 0.7
-    length_adjust: 1.0
-    output_sample_rate: 16000
+  parameters:                  # VERIFIED against batch_convert.py:91-93
+    diffusion_steps: 30        # --diffusion-steps default
+    cfg_rate: 0.7              # --cfg-rate default
+    length_adjust: 1.0         # --length-adjust default
+    f0_condition: false        # --f0-condition default
+  output_sample_rate: 22050    # batch_convert.py:132 -- `44100 if f0_condition
+                               # else 22050`. The paper (3.3, 4.5) claims 16 kHz;
+                               # that is WRONG. No resampling happens here.
+                               # Confirmed against the released audio.
 
 # --- MISMATCH between the two voice sets ------------------------------------
-# Seed-VC's fourth LibriSpeech speaker is 1089-134686-0000; GenVC's is
-# 8842-302201-0002. The other three LibriSpeech speakers match. If Table 2
-# averages results over "the same six target voices" for both systems, that
-# premise does not hold — the two systems were run on different voice sets.
-# Resolve before publication: either regenerate one system on the other's set,
-# or report per-system results instead of the mean.
+# VERIFIED from both sides. Seed-VC's SCRIPT_TEST/references_neutral/ contains
+# 1089-134686-0000 -- matching paper 4.4. GenVC's download_references.py uses
+# 8842-302201-0002 and never 1089. The other three LibriSpeech speakers match.
+# Table 2 is captioned "Mean of Models", so its 1089 row cannot be a mean over
+# both systems. Resolve before publication: regenerate GenVC on 1089, or report
+# per-system results instead of the mean.
 voice_set_mismatch: true
 
 # --- reproducibility --------------------------------------------------------
